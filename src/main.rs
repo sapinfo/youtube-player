@@ -1,4 +1,5 @@
 mod player;
+mod store;
 mod url;
 
 fn main() -> eframe::Result<()> {
