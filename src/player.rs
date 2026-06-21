@@ -29,9 +29,9 @@ impl WindowSize {
     /// UI 드롭다운 라벨.
     pub fn label(self) -> &'static str {
         match self {
-            WindowSize::Small => "작음 (480x270)",
-            WindowSize::Medium => "중간 (640x360)",
-            WindowSize::Large => "큼 (960x540)",
+            WindowSize::Small => "Small (480x270)",
+            WindowSize::Medium => "Medium (640x360)",
+            WindowSize::Large => "Large (960x540)",
         }
     }
 }
@@ -74,7 +74,7 @@ pub fn play(url: &str, settings: &Settings) -> Result<(), String> {
         .args(&args)
         .spawn()
         .map(|_child| ())
-        .map_err(|e| format!("mpv 실행 실패: {e}. mpv와 yt-dlp가 모두 설치돼 있어야 합니다."))
+        .map_err(|e| format!("Failed to launch mpv: {e}. Both mpv and yt-dlp must be installed."))
 }
 
 #[cfg(test)]

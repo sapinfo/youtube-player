@@ -46,17 +46,17 @@ impl eframe::App for App {
             if !self.mpv_available {
                 ui.colored_label(
                     egui::Color32::from_rgb(200, 60, 60),
-                    "mpv가 필요합니다: 터미널에서 `brew install mpv` 실행 후 앱을 다시 시작하세요.",
+                    "mpv is required: run `brew install mpv` in a terminal, then restart the app.",
                 );
             }
 
             ui.separator();
 
-            // --- 재생 설정 ---
-            ui.label("재생 설정");
+            // --- playback settings ---
+            ui.label("Playback settings");
             let mut changed = false;
-            changed |= ui.checkbox(&mut self.data.settings.ontop, "항상 위(ontop)").changed();
-            egui::ComboBox::from_label("창 크기")
+            changed |= ui.checkbox(&mut self.data.settings.ontop, "Always on top").changed();
+            egui::ComboBox::from_label("Window size")
                 .selected_text(self.data.settings.window_size.label())
                 .show_ui(ui, |ui| {
                     for size in [WindowSize::Small, WindowSize::Medium, WindowSize::Large] {
@@ -71,26 +71,26 @@ impl eframe::App for App {
 
             ui.separator();
 
-            // --- 저장된 목록 ---
-            ui.label("저장된 영상");
+            // --- saved list ---
+            ui.label("Saved videos");
             let mut action: Option<ListAction> = None;
             let count = self.data.entries.len();
             for (i, entry) in self.data.entries.iter().enumerate() {
                 ui.horizontal(|ui| {
-                    let play_btn = ui.add_enabled(self.mpv_available, egui::Button::new("▶"));
+                    let play_btn = ui.add_enabled(self.mpv_available, egui::Button::new("Play"));
                     if play_btn.clicked() {
                         action = Some(ListAction::Play(i));
                     }
-                    if ui.button("✎").clicked() {
+                    if ui.button("Edit").clicked() {
                         action = Some(ListAction::Edit(i));
                     }
-                    if ui.button("🗑").clicked() {
+                    if ui.button("Delete").clicked() {
                         action = Some(ListAction::Delete(i));
                     }
-                    if ui.add_enabled(i > 0, egui::Button::new("↑")).clicked() {
+                    if ui.add_enabled(i > 0, egui::Button::new("Up")).clicked() {
                         action = Some(ListAction::Up(i));
                     }
-                    if ui.add_enabled(i + 1 < count, egui::Button::new("↓")).clicked() {
+                    if ui.add_enabled(i + 1 < count, egui::Button::new("Down")).clicked() {
                         action = Some(ListAction::Down(i));
                     }
                     ui.label(if entry.name.is_empty() { &entry.url } else { &entry.name });
@@ -103,10 +103,10 @@ impl eframe::App for App {
 
             ui.separator();
 
-            // --- 추가/수정 폼 ---
-            ui.label(if self.form.editing.is_some() { "수정" } else { "추가" });
+            // --- add/edit form ---
+            ui.label(if self.form.editing.is_some() { "Edit" } else { "Add" });
             ui.horizontal(|ui| {
-                ui.label("이름");
+                ui.label("Name");
                 ui.text_edit_singleline(&mut self.form.name);
             });
             ui.horizontal(|ui| {
@@ -114,11 +114,11 @@ impl eframe::App for App {
                 ui.text_edit_singleline(&mut self.form.url);
             });
             ui.horizontal(|ui| {
-                let label = if self.form.editing.is_some() { "저장" } else { "추가" };
+                let label = if self.form.editing.is_some() { "Save" } else { "Add" };
                 if ui.button(label).clicked() {
                     self.submit_form();
                 }
-                if self.form.editing.is_some() && ui.button("취소").clicked() {
+                if self.form.editing.is_some() && ui.button("Cancel").clicked() {
                     self.form = Form::default();
                 }
             });
@@ -145,12 +145,12 @@ impl App {
             ListAction::Play(i) => {
                 if let Some(e) = self.data.entries.get(i) {
                     if !url::validate(&e.url) {
-                        self.status = "잘못된 YouTube URL입니다.".into();
+                        self.status = "Invalid YouTube URL.".into();
                     } else {
                         let url = e.url.clone();
                         let settings = self.data.settings.clone();
                         match player::play(&url, &settings) {
-                            Ok(()) => self.status = "재생 중…".into(),
+                            Ok(()) => self.status = "Playing…".into(),
                             Err(e) => self.status = e,
                         }
                     }
@@ -183,7 +183,7 @@ impl App {
         let name = self.form.name.trim().to_string();
         let url_value = self.form.url.trim().to_string();
         if url_value.is_empty() || !url::validate(&url_value) {
-            self.status = "잘못된 YouTube URL입니다.".into();
+            self.status = "Invalid YouTube URL.".into();
             return;
         }
         match self.form.editing {

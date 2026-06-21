@@ -69,10 +69,10 @@ pub fn load_from(path: &std::path::Path) -> AppData {
 /// 지정 경로에 AppData를 저장한다. 상위 디렉터리는 필요 시 생성한다.
 pub fn save_to(path: &std::path::Path, data: &AppData) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("디렉터리 생성 실패: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
     }
-    let json = serde_json::to_string_pretty(data).map_err(|e| format!("직렬화 실패: {e}"))?;
-    std::fs::write(path, json).map_err(|e| format!("저장 실패: {e}"))
+    let json = serde_json::to_string_pretty(data).map_err(|e| format!("Failed to serialize: {e}"))?;
+    std::fs::write(path, json).map_err(|e| format!("Failed to save: {e}"))
 }
 
 /// 표준 경로에서 로드.
