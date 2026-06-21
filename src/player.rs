@@ -1,3 +1,5 @@
+use std::process::Command;
+
 use serde::{Deserialize, Serialize};
 
 /// mpv 시작 창 크기 프리셋.
@@ -52,6 +54,27 @@ pub fn build_args(url: &str, settings: &Settings) -> Vec<String> {
     }
     args.push(url.to_string());
     args
+}
+
+/// mpv 실행 파일이 PATH에 있는지 확인한다.
+pub fn is_mpv_available() -> bool {
+    Command::new("mpv")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// 설정에 따라 mpv 자식 프로세스를 띄운다. 즉시 반환한다(재생 종료를 기다리지 않음).
+pub fn play(url: &str, settings: &Settings) -> Result<(), String> {
+    let args = build_args(url, settings);
+    Command::new("mpv")
+        .args(&args)
+        .spawn()
+        .map(|_child| ())
+        .map_err(|e| format!("mpv 실행 실패: {e}. mpv와 yt-dlp가 모두 설치돼 있어야 합니다."))
 }
 
 #[cfg(test)]
