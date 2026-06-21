@@ -1,6 +1,35 @@
+use std::path::PathBuf;
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
+
+/// Directories to search for mpv and to expose to the spawned mpv process,
+/// in addition to the inherited PATH. A `.app` launched from Finder gets a
+/// minimal PATH that excludes Homebrew locations, so mpv (and the yt-dlp it
+/// calls internally) would otherwise not be found.
+const EXTRA_PATHS: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
+
+/// Resolve the mpv executable: prefer known Homebrew locations, otherwise fall
+/// back to the bare name (resolved via the inherited PATH).
+fn mpv_command() -> PathBuf {
+    for dir in EXTRA_PATHS {
+        let candidate = PathBuf::from(dir).join("mpv");
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+    PathBuf::from("mpv")
+}
+
+/// PATH that prepends the extra directories so mpv can locate yt-dlp.
+fn augmented_path() -> String {
+    let current = std::env::var("PATH").unwrap_or_default();
+    let mut parts: Vec<String> = EXTRA_PATHS.iter().map(|s| s.to_string()).collect();
+    if !current.is_empty() {
+        parts.push(current);
+    }
+    parts.join(":")
+}
 
 /// mpv 시작 창 크기 프리셋.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -58,8 +87,9 @@ pub fn build_args(url: &str, settings: &Settings) -> Vec<String> {
 
 /// mpv 실행 파일이 PATH에 있는지 확인한다.
 pub fn is_mpv_available() -> bool {
-    Command::new("mpv")
+    Command::new(mpv_command())
         .arg("--version")
+        .env("PATH", augmented_path())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -70,8 +100,9 @@ pub fn is_mpv_available() -> bool {
 /// 설정에 따라 mpv 자식 프로세스를 띄운다. 즉시 반환한다(재생 종료를 기다리지 않음).
 pub fn play(url: &str, settings: &Settings) -> Result<(), String> {
     let args = build_args(url, settings);
-    Command::new("mpv")
+    Command::new(mpv_command())
         .args(&args)
+        .env("PATH", augmented_path())
         .spawn()
         .map(|_child| ())
         .map_err(|e| format!("Failed to launch mpv: {e}. Both mpv and yt-dlp must be installed."))
