@@ -71,6 +71,17 @@ impl eframe::App for App {
 
             ui.separator();
 
+            // --- local file ---
+            ui.label("Local video file");
+            if ui
+                .add_enabled(self.mpv_available, egui::Button::new("Play local file…"))
+                .clicked()
+            {
+                self.play_local_file();
+            }
+
+            ui.separator();
+
             // --- saved list ---
             ui.label("Saved videos");
             let mut action: Option<ListAction> = None;
@@ -175,6 +186,28 @@ impl App {
             ListAction::Down(i) => {
                 self.data.move_down(i);
                 self.persist();
+            }
+        }
+    }
+
+    /// 네이티브 파일 선택기로 동영상 파일을 골라 mpv로 바로 재생한다.
+    fn play_local_file(&mut self) {
+        let picked = rfd::FileDialog::new()
+            .set_title("Select a video file")
+            .add_filter(
+                "Video",
+                &[
+                    "mp4", "mov", "mkv", "avi", "webm", "m4v", "flv", "wmv", "mpg", "mpeg", "ts",
+                    "m2ts",
+                ],
+            )
+            .pick_file();
+        if let Some(path) = picked {
+            let path_str = path.to_string_lossy().to_string();
+            let settings = self.data.settings.clone();
+            match player::play(&path_str, &settings) {
+                Ok(()) => self.status = "Playing…".into(),
+                Err(e) => self.status = e,
             }
         }
     }
