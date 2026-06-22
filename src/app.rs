@@ -84,6 +84,13 @@ impl eframe::App for App {
                 );
             }
 
+            if !self.ffmpeg_available {
+                ui.colored_label(
+                    egui::Color32::from_rgb(200, 60, 60),
+                    "ffmpeg is required for MP3 extraction: run `brew install ffmpeg`, then restart the app.",
+                );
+            }
+
             ui.separator();
 
             // --- playback settings ---
@@ -125,6 +132,14 @@ impl eframe::App for App {
                     let play_btn = ui.add_enabled(self.mpv_available, egui::Button::new("Play"));
                     if play_btn.clicked() {
                         action = Some(ListAction::Play(i));
+                    }
+                    let can_extract =
+                        self.mpv_available && self.ffmpeg_available && !self.extracting;
+                    if ui
+                        .add_enabled(can_extract, egui::Button::new("MP3"))
+                        .clicked()
+                    {
+                        action = Some(ListAction::Extract(i));
                     }
                     if ui.button("Edit").clicked() {
                         action = Some(ListAction::Edit(i));
