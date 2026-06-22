@@ -19,6 +19,49 @@ pub fn build_extract_args(url: &str, out_dir: &Path) -> Vec<String> {
     ]
 }
 
+/// yt-dlp 실행 파일을 찾는다: 알려진 Homebrew 경로 우선, 없으면 PATH로 해석되는 bare name.
+fn yt_dlp_command() -> PathBuf {
+    for dir in EXTRA_PATHS {
+        let candidate = PathBuf::from(dir).join("yt-dlp");
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+    PathBuf::from("yt-dlp")
+}
+
+/// ffmpeg가 PATH(보강된)에서 실행 가능한지 확인한다. mp3 변환에 필요하다.
+pub fn is_ffmpeg_available() -> bool {
+    Command::new("ffmpeg")
+        .arg("-version")
+        .env("PATH", augmented_path())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// yt-dlp로 오디오를 mp3로 추출한다. 종료까지 대기하므로 백그라운드 스레드에서 호출할 것.
+/// 성공 시 저장 폴더 경로 문자열을 돌려준다.
+pub fn extract_mp3(url: &str, out_dir: &Path) -> Result<String, String> {
+    let args = build_extract_args(url, out_dir);
+    let output = Command::new(yt_dlp_command())
+        .args(&args)
+        .env("PATH", augmented_path())
+        .output()
+        .map_err(|e| {
+            format!("Failed to launch yt-dlp: {e}. yt-dlp and ffmpeg must be installed.")
+        })?;
+    if output.status.success() {
+        Ok(out_dir.to_string_lossy().to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let detail = stderr.trim().lines().last().unwrap_or("unknown error");
+        Err(format!("Extraction failed: {detail}"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
