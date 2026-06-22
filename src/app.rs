@@ -63,7 +63,9 @@ impl eframe::App for App {
                         self.extract_rx = None;
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        ctx.request_repaint(); // 완료 시점에 다시 그리도록
+                        // 추출 완료 시점을 반영하도록 주기적으로 다시 그린다.
+                        // 매 프레임 spin 하지 않게 200ms 간격으로 폴링.
+                        ctx.request_repaint_after(std::time::Duration::from_millis(200));
                     }
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                         self.status = "Extraction thread stopped unexpectedly.".into();
