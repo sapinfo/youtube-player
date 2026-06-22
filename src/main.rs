@@ -1,4 +1,5 @@
 mod app;
+mod audio;
 mod player;
 mod store;
 mod url;
