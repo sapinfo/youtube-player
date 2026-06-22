@@ -1,5 +1,8 @@
+use std::sync::mpsc::Receiver;
+
 use eframe::egui;
 
+use crate::audio;
 use crate::player::{self, WindowSize};
 use crate::store::{self, AppData};
 use crate::url;
@@ -16,7 +19,10 @@ pub struct App {
     data: AppData,
     form: Form,
     mpv_available: bool,
+    ffmpeg_available: bool,
     status: String,
+    extracting: bool,
+    extract_rx: Option<Receiver<Result<String, String>>>,
 }
 
 impl Default for App {
@@ -25,7 +31,10 @@ impl Default for App {
             data: store::load(),
             form: Form::default(),
             mpv_available: player::is_mpv_available(),
+            ffmpeg_available: audio::is_ffmpeg_available(),
             status: String::new(),
+            extracting: false,
+            extract_rx: None,
         }
     }
 }
