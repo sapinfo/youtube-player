@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// in addition to the inherited PATH. A `.app` launched from Finder gets a
 /// minimal PATH that excludes Homebrew locations, so mpv (and the yt-dlp it
 /// calls internally) would otherwise not be found.
-const EXTRA_PATHS: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
+pub(crate) const EXTRA_PATHS: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
 
 /// Resolve the mpv executable: prefer known Homebrew locations, otherwise fall
 /// back to the bare name (resolved via the inherited PATH).
@@ -22,7 +22,7 @@ fn mpv_command() -> PathBuf {
 }
 
 /// PATH that prepends the extra directories so mpv can locate yt-dlp.
-fn augmented_path() -> String {
+pub(crate) fn augmented_path() -> String {
     let current = std::env::var("PATH").unwrap_or_default();
     let mut parts: Vec<String> = EXTRA_PATHS.iter().map(|s| s.to_string()).collect();
     if !current.is_empty() {
