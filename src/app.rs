@@ -49,6 +49,31 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.extracting {
+            if let Some(rx) = &self.extract_rx {
+                match rx.try_recv() {
+                    Ok(Ok(dir)) => {
+                        self.status = format!("Saved to: {dir}");
+                        self.extracting = false;
+                        self.extract_rx = None;
+                    }
+                    Ok(Err(e)) => {
+                        self.status = e;
+                        self.extracting = false;
+                        self.extract_rx = None;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        ctx.request_repaint(); // 완료 시점에 다시 그리도록
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        self.status = "Extraction thread stopped unexpectedly.".into();
+                        self.extracting = false;
+                        self.extract_rx = None;
+                    }
+                }
+            }
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("YouTube Player");
 
@@ -153,6 +178,7 @@ impl eframe::App for App {
 
 enum ListAction {
     Play(usize),
+    Extract(usize),
     Edit(usize),
     Delete(usize),
     Up(usize),
@@ -173,6 +199,16 @@ impl App {
                             Ok(()) => self.status = "Playing…".into(),
                             Err(e) => self.status = e,
                         }
+                    }
+                }
+            }
+            ListAction::Extract(i) => {
+                if let Some(e) = self.data.entries.get(i) {
+                    if !url::validate(&e.url) {
+                        self.status = "Invalid YouTube URL.".into();
+                    } else {
+                        let url = e.url.clone();
+                        self.extract_to_mp3(url);
                     }
                 }
             }
@@ -219,6 +255,24 @@ impl App {
                 Err(e) => self.status = e,
             }
         }
+    }
+
+    /// 폴더를 고른 뒤 백그라운드 스레드에서 mp3로 추출한다. 결과는 채널로 전달된다.
+    fn extract_to_mp3(&mut self, url: String) {
+        let Some(dir) = rfd::FileDialog::new()
+            .set_title("Select a folder to save the MP3")
+            .pick_folder()
+        else {
+            return; // 사용자가 취소함
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.extract_rx = Some(rx);
+        self.extracting = true;
+        self.status = "Extracting…".into();
+        std::thread::spawn(move || {
+            let result = audio::extract_mp3(&url, &dir);
+            let _ = tx.send(result);
+        });
     }
 
     fn submit_form(&mut self) {
