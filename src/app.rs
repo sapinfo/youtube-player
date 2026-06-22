@@ -1,5 +1,8 @@
+use std::sync::mpsc::Receiver;
+
 use eframe::egui;
 
+use crate::audio;
 use crate::player::{self, WindowSize};
 use crate::store::{self, AppData};
 use crate::url;
@@ -16,7 +19,10 @@ pub struct App {
     data: AppData,
     form: Form,
     mpv_available: bool,
+    ffmpeg_available: bool,
     status: String,
+    extracting: bool,
+    extract_rx: Option<Receiver<Result<String, String>>>,
 }
 
 impl Default for App {
@@ -25,7 +31,10 @@ impl Default for App {
             data: store::load(),
             form: Form::default(),
             mpv_available: player::is_mpv_available(),
+            ffmpeg_available: audio::is_ffmpeg_available(),
             status: String::new(),
+            extracting: false,
+            extract_rx: None,
         }
     }
 }
@@ -40,6 +49,33 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.extracting {
+            if let Some(rx) = &self.extract_rx {
+                match rx.try_recv() {
+                    Ok(Ok(dir)) => {
+                        self.status = format!("Saved to: {dir}");
+                        self.extracting = false;
+                        self.extract_rx = None;
+                    }
+                    Ok(Err(e)) => {
+                        self.status = e;
+                        self.extracting = false;
+                        self.extract_rx = None;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        // 추출 완료 시점을 반영하도록 주기적으로 다시 그린다.
+                        // 매 프레임 spin 하지 않게 200ms 간격으로 폴링.
+                        ctx.request_repaint_after(std::time::Duration::from_millis(200));
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        self.status = "Extraction thread stopped unexpectedly.".into();
+                        self.extracting = false;
+                        self.extract_rx = None;
+                    }
+                }
+            }
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("YouTube Player");
 
@@ -47,6 +83,13 @@ impl eframe::App for App {
                 ui.colored_label(
                     egui::Color32::from_rgb(200, 60, 60),
                     "mpv is required: run `brew install mpv` in a terminal, then restart the app.",
+                );
+            }
+
+            if !self.ffmpeg_available {
+                ui.colored_label(
+                    egui::Color32::from_rgb(200, 60, 60),
+                    "ffmpeg is required for MP3 extraction: run `brew install ffmpeg`, then restart the app.",
                 );
             }
 
@@ -91,6 +134,14 @@ impl eframe::App for App {
                     let play_btn = ui.add_enabled(self.mpv_available, egui::Button::new("Play"));
                     if play_btn.clicked() {
                         action = Some(ListAction::Play(i));
+                    }
+                    let can_extract =
+                        self.mpv_available && self.ffmpeg_available && !self.extracting;
+                    if ui
+                        .add_enabled(can_extract, egui::Button::new("MP3"))
+                        .clicked()
+                    {
+                        action = Some(ListAction::Extract(i));
                     }
                     if ui.button("Edit").clicked() {
                         action = Some(ListAction::Edit(i));
@@ -144,6 +195,7 @@ impl eframe::App for App {
 
 enum ListAction {
     Play(usize),
+    Extract(usize),
     Edit(usize),
     Delete(usize),
     Up(usize),
@@ -164,6 +216,16 @@ impl App {
                             Ok(()) => self.status = "Playing…".into(),
                             Err(e) => self.status = e,
                         }
+                    }
+                }
+            }
+            ListAction::Extract(i) => {
+                if let Some(e) = self.data.entries.get(i) {
+                    if !url::validate(&e.url) {
+                        self.status = "Invalid YouTube URL.".into();
+                    } else {
+                        let url = e.url.clone();
+                        self.extract_to_mp3(url);
                     }
                 }
             }
@@ -210,6 +272,24 @@ impl App {
                 Err(e) => self.status = e,
             }
         }
+    }
+
+    /// 폴더를 고른 뒤 백그라운드 스레드에서 mp3로 추출한다. 결과는 채널로 전달된다.
+    fn extract_to_mp3(&mut self, url: String) {
+        let Some(dir) = rfd::FileDialog::new()
+            .set_title("Select a folder to save the MP3")
+            .pick_folder()
+        else {
+            return; // 사용자가 취소함
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.extract_rx = Some(rx);
+        self.extracting = true;
+        self.status = "Extracting…".into();
+        std::thread::spawn(move || {
+            let result = audio::extract_mp3(&url, &dir);
+            let _ = tx.send(result);
+        });
     }
 
     fn submit_form(&mut self) {
